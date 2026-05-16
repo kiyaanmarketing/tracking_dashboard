@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Tracking Dashboard</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+
+  <div class="sidebar">
+    <div class="logo">
+      <span class="logo-icon">⬡</span>
+      <span class="logo-text">TrackManager</span>
+    </div>
+    <nav>
+      <button class="nav-btn active" onclick="switchTab('list')" id="nav-list">
+        <span class="nav-icon">≡</span> All Sites
+      </button>
+      <button class="nav-btn" onclick="switchTab('add')" id="nav-add">
+        <span class="nav-icon">+</span> Add Site
+      </button>
+    </nav>
+    <div class="sidebar-footer">
+      <div id="db-status" class="db-badge">● Connecting...</div>
+    </div>
+  </div>
+
+  <div class="main">
+
+    <!-- LIST VIEW -->
+    <div class="pane active" id="pane-list">
+      <div class="page-header">
+        <div>
+          <h1>Sites</h1>
+          <p class="sub">Sabhi configured tracking sites</p>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn-ghost" id="check-all-btn" onclick="checkAllScripts()">⟳ Check All</button>
+          <button class="btn-primary" onclick="switchTab('add')">+ Add Site</button>
+        </div>
+      </div>
+
+      <div class="search-row">
+        <input type="text" id="search-input" placeholder="Search by hostname or campaign..." oninput="filterSites()" />
+        <span id="site-count" class="count-badge">0 sites</span>
+      </div>
+
+      <div id="sites-grid" class="sites-grid">
+        <div class="loading">Loading sites...</div>
+      </div>
+    </div>
+
+    <!-- ADD / EDIT VIEW -->
+    <div class="pane" id="pane-add">
+      <div class="page-header">
+        <div>
+          <h1 id="form-title">Add Site</h1>
+          <p class="sub" id="form-sub">Nayi tracking site add karo</p>
+        </div>
+        <button class="btn-ghost" onclick="switchTab('list')">← Back</button>
+      </div>
+
+      <div class="form-grid">
+        <div class="form-card">
+          <div class="form-card-title">Site Info <span class="required-note">* required</span></div>
+
+          <div class="field">
+            <label>Site URL <span class="req">*</span></label>
+            <input id="f-host" placeholder="www.fareastflora.com" />
+            <div class="hint">Sirf hostname — https:// mat daalo</div>
+          </div>
+          <div class="field">
+            <label>Campaign Name <span class="req">*</span></label>
+            <input id="f-campaign" placeholder="FlowerSG" />
+          </div>
+          <div class="field">
+            <label>Fire Mode <span class="req">*</span></label>
+            <select id="f-mode">
+              <option value="cart">Cart / Checkout page pe sirf</option>
+              <option value="always">Har page pe (always)</option>
+              <option value="both">Har page + Cart (double fire)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-card">
+          <div class="form-card-title">Script <span class="optional-note">optional</span></div>
+          <div class="field">
+            <label>Script naam</label>
+            <input id="f-script" placeholder="retagcap.js" />
+          </div>
+          <div class="field">
+            <label>Script full URL</label>
+            <input id="f-script-url" placeholder="https://aimedialinks.com/retagcap.js" />
+          </div>
+        </div>
+
+        <div class="form-card">
+          <div class="form-card-title">API <span class="optional-note">optional</span></div>
+          <div class="field">
+            <label>API Endpoint</label>
+            <input id="f-api" placeholder="https://api.theclicksdealer.com/track-user" />
+            <div class="hint">Khaali chhodo agar default use hona hai</div>
+          </div>
+          <div class="field">
+            <label>Pixel / Affiliate URL</label>
+            <input id="f-pixel" placeholder="https://tracks.dicountshop.com/c?..." />
+          </div>
+        </div>
+      </div>
+
+      <div class="form-actions">
+        <button class="btn-primary" onclick="saveSite()">Save Site</button>
+        <button class="btn-ghost" onclick="clearForm()">Clear</button>
+        <button class="btn-danger" id="delete-btn" style="display:none" onclick="deleteSite()">Delete Site</button>
+      </div>
+      <div id="form-error" class="form-error" style="display:none"></div>
+    </div>
+
+    <!-- DETAIL VIEW -->
+    <div class="pane" id="pane-detail">
+      <div class="page-header">
+        <div>
+          <h1 id="detail-title">Site Detail</h1>
+          <p class="sub" id="detail-sub"></p>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn-ghost" id="detail-edit-btn" onclick="">Edit</button>
+          <button class="btn-ghost" onclick="switchTab('list')">← Back</button>
+        </div>
+      </div>
+      <div id="detail-body"></div>
+    </div>
+
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script src="/js/app.js"></script>
+</body>
+</html>
