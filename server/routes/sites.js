@@ -100,8 +100,25 @@ router.get('/:host/check', async (req, res) => {
       html = await fetchHTML(`http://${site.host}${checkPath}`);
     }
 
-    const found = html.includes(checkStr);
-    res.json({ success: true, found, checked: checkStr });
+    if (html.includes(checkStr)) {
+      return res.json({ success: true, found: true, checked: checkStr });
+    }
+
+    // Script dynamically load hoti hai — scriptUrl ka HEAD check karo
+    if (!site.checkString && site.scriptUrl) {
+      const scriptAccessible = await new Promise((resolve) => {
+        const lib = site.scriptUrl.startsWith('https') ? https : http;
+        const req2 = lib.request(site.scriptUrl, { method: 'HEAD', rejectUnauthorized: false }, (r) => resolve(r.statusCode < 400));
+        req2.setTimeout(8000, () => resolve(false));
+        req2.on('error', () => resolve(false));
+        req2.end();
+      });
+      if (scriptAccessible) {
+        return res.json({ success: true, found: true, checked: checkStr, note: 'dynamic' });
+      }
+    }
+
+    res.json({ success: true, found: false, checked: checkStr });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
