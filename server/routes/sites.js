@@ -105,7 +105,7 @@ router.get('/:host/check', async (req, res) => {
     }
 
     // Script dynamically load hoti hai — scriptUrl ka HEAD check karo
-    if (!site.checkString && site.scriptUrl) {
+    if (site.scriptUrl) {
       const scriptAccessible = await new Promise((resolve) => {
         const lib = site.scriptUrl.startsWith('https') ? https : http;
         const req2 = lib.request(site.scriptUrl, { method: 'HEAD', rejectUnauthorized: false }, (r) => resolve(r.statusCode < 400));
