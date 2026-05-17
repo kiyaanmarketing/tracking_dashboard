@@ -90,6 +90,7 @@ function renderGrid(sites) {
           <div class="check-row">
             <span data-host-check="${s.host}">${checkBadge}</span>
             ${hasScript ? `<button class="btn-check" onclick="event.stopPropagation(); checkScript('${s.host}')">⟳</button>` : ''}
+            <button class="btn-check" style="padding:2px 10px;font-size:11px" onclick="event.stopPropagation(); editSite('${s.host}')">Edit</button>
           </div>
         </div>
       </div>`;

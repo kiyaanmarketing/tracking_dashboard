@@ -92,11 +92,12 @@ router.get('/:host/check', async (req, res) => {
     }
 
     const checkStr = site.scriptUrl || site.script;
+    const checkPath = site.always ? '' : '/cart';
     let html;
     try {
-      html = await fetchHTML(`https://${site.host}`);
+      html = await fetchHTML(`https://${site.host}${checkPath}`);
     } catch {
-      html = await fetchHTML(`http://${site.host}`);
+      html = await fetchHTML(`http://${site.host}${checkPath}`);
     }
 
     const found = html.includes(checkStr);
