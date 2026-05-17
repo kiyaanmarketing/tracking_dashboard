@@ -76,7 +76,6 @@ function renderGrid(sites) {
         <div class="site-card-top">
           <div>
             <div class="site-host">${s.host}</div>
-            <div class="site-campaign">${s.campaign}</div>
           </div>
           <span class="badge ${badgeClass}">${mode}</span>
         </div>
@@ -192,10 +191,9 @@ async function saveSite() {
   errEl.style.display = 'none';
 
   const host = document.getElementById('f-host').value.trim().replace(/^https?:\/\//, '').split('/')[0].toLowerCase();
-  const campaign = document.getElementById('f-campaign').value.trim();
 
-  if (!host || !campaign) {
-    errEl.textContent = '❌ Site URL aur Campaign naam required hai';
+  if (!host) {
+    errEl.textContent = '❌ Site URL required hai';
     errEl.style.display = 'block';
     return;
   }
@@ -203,7 +201,6 @@ async function saveSite() {
   const mode = document.getElementById('f-mode').value;
   const payload = {
     host,
-    campaign,
     always:    mode === 'always' || mode === 'both',
     cartExtra: mode === 'cart'   || mode === 'both',
     script:       document.getElementById('f-script').value.trim()       || null,
@@ -244,7 +241,6 @@ async function editSite(host) {
 
     document.getElementById('f-host').value = s.host;
     document.getElementById('f-host').readOnly = true;
-    document.getElementById('f-campaign').value = s.campaign || '';
     document.getElementById('f-mode').value = s.always && s.cartExtra ? 'both' : s.always ? 'always' : 'cart';
     document.getElementById('f-script').value = s.script || '';
     document.getElementById('f-script-url').value = s.scriptUrl || '';
@@ -284,7 +280,7 @@ async function deleteSite() {
 
 // ── Clear form ─────────────────────────────────────────────────────────────
 function clearForm() {
-  ['f-host','f-campaign','f-script','f-script-url','f-check-string','f-api','f-pixel'].forEach(id => {
+  ['f-host','f-script','f-script-url','f-check-string','f-api','f-pixel'].forEach(id => {
     document.getElementById(id).value = '';
   });
   document.getElementById('f-host').readOnly = false;

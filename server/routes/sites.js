@@ -61,17 +61,17 @@ router.get('/:host', async (req, res) => {
 // POST create or update site (upsert)
 router.post('/', async (req, res) => {
   try {
-    const { host, campaign, always, cartExtra, script, scriptUrl, api, pixel, checkString } = req.body;
+    const { host, always, cartExtra, script, scriptUrl, api, pixel, checkString } = req.body;
 
-    if (!host || !campaign) {
-      return res.status(400).json({ success: false, message: 'Host aur campaign required hai' });
+    if (!host) {
+      return res.status(400).json({ success: false, message: 'Host required hai' });
     }
 
     const cleanHost = host.replace(/^https?:\/\//, '').split('/')[0].toLowerCase();
 
     const site = await Site.findOneAndUpdate(
       { host: cleanHost },
-      { host: cleanHost, campaign, always, cartExtra, script, scriptUrl, api, pixel, checkString },
+      { host: cleanHost, campaign: cleanHost, always, cartExtra, script, scriptUrl, api, pixel, checkString },
       { upsert: true, new: true, runValidators: true }
     );
 
@@ -100,25 +100,8 @@ router.get('/:host/check', async (req, res) => {
       html = await fetchHTML(`http://${site.host}${checkPath}`);
     }
 
-    if (html.includes(checkStr)) {
-      return res.json({ success: true, found: true, checked: checkStr });
-    }
-
-    // Script dynamically load hoti hai — scriptUrl ka HEAD check karo
-    if (site.scriptUrl) {
-      const scriptAccessible = await new Promise((resolve) => {
-        const lib = site.scriptUrl.startsWith('https') ? https : http;
-        const req2 = lib.request(site.scriptUrl, { method: 'HEAD', rejectUnauthorized: false }, (r) => resolve(r.statusCode < 400));
-        req2.setTimeout(8000, () => resolve(false));
-        req2.on('error', () => resolve(false));
-        req2.end();
-      });
-      if (scriptAccessible) {
-        return res.json({ success: true, found: true, checked: checkStr, note: 'dynamic' });
-      }
-    }
-
-    res.json({ success: true, found: false, checked: checkStr });
+    const found = html.includes(checkStr);
+    res.json({ success: true, found, checked: checkStr });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
