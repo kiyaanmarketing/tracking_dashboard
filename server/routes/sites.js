@@ -1,40 +1,29 @@
 const express = require('express');
 const router = express.Router();
-const https = require('https');
-const http = require('http');
 const Site = require('../models/Site');
+const puppeteer = require('puppeteer');
 
-function fetchHTML(url, redirects = 0) {
-  return new Promise((resolve, reject) => {
-    if (redirects > 4) return reject(new Error('Too many redirects'));
-    const lib = url.startsWith('https') ? https : http;
-    let settled = false;
-    const settle = (fn, val) => { if (!settled) { settled = true; fn(val); } };
-
-    const opts = {
-      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0 Safari/537.36' },
-      rejectUnauthorized: false
-    };
-
-    const req = lib.get(url, opts, (res) => {
-      if ([301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location) {
-        const next = res.headers.location.startsWith('http')
-          ? res.headers.location
-          : new URL(res.headers.location, url).href;
-        res.resume();
-        return fetchHTML(next, redirects + 1).then(v => settle(resolve, v)).catch(e => settle(reject, e));
-      }
-      let html = '';
-      res.on('data', chunk => {
-        html += chunk;
-        if (html.length > 600000) { settle(resolve, html); req.destroy(); }
-      });
-      res.on('end', () => settle(resolve, html));
-      res.on('error', err => settle(reject, err));
-    });
-    req.setTimeout(15000, () => { settle(reject, new Error('Timeout — site slow hai')); req.destroy(); });
-    req.on('error', err => settle(reject, err));
+async function checkScriptInNetwork(pageUrl, scriptName) {
+  const browser = await puppeteer.launch({
+    headless: 'new',
+    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu']
   });
+  try {
+    const page = await browser.newPage();
+    let found = false;
+
+    page.on('request', (request) => {
+      if (request.url().toLowerCase().includes(scriptName.toLowerCase())) {
+        found = true;
+      }
+    });
+
+    await page.goto(pageUrl, { waitUntil: 'networkidle2', timeout: 30000 });
+
+    return found;
+  } finally {
+    await browser.close();
+  }
 }
 
 // GET all sites
@@ -81,27 +70,22 @@ router.post('/', async (req, res) => {
   }
 });
 
-// GET check if script is live on site
+// GET check if script is live on site (network tab check via headless browser)
 router.get('/:host/check', async (req, res) => {
   try {
     const site = await Site.findOne({ host: req.params.host.toLowerCase() });
     if (!site) return res.status(404).json({ success: false, message: 'Site nahi mili' });
 
-    if (!site.checkString && !site.scriptUrl && !site.script) {
+    const checkStr = site.checkString || site.script;
+    if (!checkStr) {
       return res.json({ success: true, found: null, reason: 'no-script' });
     }
 
-    const checkStr = site.checkString || site.scriptUrl || site.script;
     const checkPath = site.always ? '' : '/cart';
-    let html;
-    try {
-      html = await fetchHTML(`https://${site.host}${checkPath}`);
-    } catch {
-      html = await fetchHTML(`http://${site.host}${checkPath}`);
-    }
+    const pageUrl = `https://${site.host}${checkPath}`;
 
-    const found = html.includes(checkStr);
-    res.json({ success: true, found, checked: checkStr });
+    const found = await checkScriptInNetwork(pageUrl, checkStr);
+    res.json({ success: true, found, checked: checkStr, page: pageUrl });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
