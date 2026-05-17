@@ -61,7 +61,7 @@ router.get('/:host', async (req, res) => {
 // POST create or update site (upsert)
 router.post('/', async (req, res) => {
   try {
-    const { host, campaign, always, cartExtra, script, scriptUrl, api, pixel } = req.body;
+    const { host, campaign, always, cartExtra, script, scriptUrl, api, pixel, checkString } = req.body;
 
     if (!host || !campaign) {
       return res.status(400).json({ success: false, message: 'Host aur campaign required hai' });
@@ -71,7 +71,7 @@ router.post('/', async (req, res) => {
 
     const site = await Site.findOneAndUpdate(
       { host: cleanHost },
-      { host: cleanHost, campaign, always, cartExtra, script, scriptUrl, api, pixel },
+      { host: cleanHost, campaign, always, cartExtra, script, scriptUrl, api, pixel, checkString },
       { upsert: true, new: true, runValidators: true }
     );
 
@@ -87,11 +87,11 @@ router.get('/:host/check', async (req, res) => {
     const site = await Site.findOne({ host: req.params.host.toLowerCase() });
     if (!site) return res.status(404).json({ success: false, message: 'Site nahi mili' });
 
-    if (!site.scriptUrl && !site.script) {
+    if (!site.checkString && !site.scriptUrl && !site.script) {
       return res.json({ success: true, found: null, reason: 'no-script' });
     }
 
-    const checkStr = site.scriptUrl || site.script;
+    const checkStr = site.checkString || site.scriptUrl || site.script;
     const checkPath = site.always ? '' : '/cart';
     let html;
     try {

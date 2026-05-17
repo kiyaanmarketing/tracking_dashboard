@@ -206,8 +206,9 @@ async function saveSite() {
     campaign,
     always:    mode === 'always' || mode === 'both',
     cartExtra: mode === 'cart'   || mode === 'both',
-    script:    document.getElementById('f-script').value.trim()     || null,
-    scriptUrl: document.getElementById('f-script-url').value.trim() || null,
+    script:       document.getElementById('f-script').value.trim()       || null,
+    scriptUrl:    document.getElementById('f-script-url').value.trim()    || null,
+    checkString:  document.getElementById('f-check-string').value.trim()  || null,
     api:       document.getElementById('f-api').value.trim()        || null,
     pixel:     document.getElementById('f-pixel').value.trim()      || null,
   };
@@ -247,6 +248,7 @@ async function editSite(host) {
     document.getElementById('f-mode').value = s.always && s.cartExtra ? 'both' : s.always ? 'always' : 'cart';
     document.getElementById('f-script').value = s.script || '';
     document.getElementById('f-script-url').value = s.scriptUrl || '';
+    document.getElementById('f-check-string').value = s.checkString || '';
     document.getElementById('f-api').value = s.api || '';
     document.getElementById('f-pixel').value = s.pixel || '';
 
@@ -282,7 +284,7 @@ async function deleteSite() {
 
 // ── Clear form ─────────────────────────────────────────────────────────────
 function clearForm() {
-  ['f-host','f-campaign','f-script','f-script-url','f-api','f-pixel'].forEach(id => {
+  ['f-host','f-campaign','f-script','f-script-url','f-check-string','f-api','f-pixel'].forEach(id => {
     document.getElementById(id).value = '';
   });
   document.getElementById('f-host').readOnly = false;

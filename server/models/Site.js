@@ -36,6 +36,10 @@ const siteSchema = new mongoose.Schema({
   pixel: {
     type: String,
     default: null
+  },
+  checkString: {
+    type: String,
+    default: null
   }
 }, {
   timestamps: true
