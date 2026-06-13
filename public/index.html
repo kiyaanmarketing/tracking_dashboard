@@ -42,7 +42,7 @@
       </div>
 
       <div class="search-row">
-        <input type="text" id="search-input" placeholder="Search by hostname or campaign..." oninput="filterSites()" />
+        <input type="text" id="search-input" placeholder="Search by hostname..." oninput="filterSites()" />
         <span id="site-count" class="count-badge">0 sites</span>
       </div>
 
@@ -91,9 +91,9 @@
             <input id="f-script-url" placeholder="https://aimedialinks.com/retagcap.js" />
           </div>
           <div class="field">
-            <label>Check String <span style="color:var(--text3);font-weight:400">(HTML mein ye string dhundho)</span></label>
+            <label>Check String <span style="color:var(--text3);font-weight:400">(network request mein dhundho)</span></label>
             <input id="f-check-string" placeholder="track.omguk.com ya retagcap.js" />
-            <div class="hint">Agar script dynamically load hoti hai to wo string daalo jo HTML source mein actually hai</div>
+            <div class="hint">Browser ke network tab mein ye string dhundhi jaati hai — dynamically load hone wali scripts ke liye use karo</div>
           </div>
         </div>
 

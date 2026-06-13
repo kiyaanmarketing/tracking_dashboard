@@ -3,26 +3,63 @@ const router = express.Router();
 const Site = require('../models/Site');
 const puppeteer = require('puppeteer');
 
-async function checkScriptInNetwork(pageUrl, scriptName) {
-  const browser = await puppeteer.launch({
-    headless: 'new',
-    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu']
+const MAX_CONCURRENT_CHECKS = 3;
+let activeChecks = 0;
+const checkQueue = [];
+
+function runNextInQueue() {
+  if (activeChecks >= MAX_CONCURRENT_CHECKS || checkQueue.length === 0) return;
+  const { resolve, fn } = checkQueue.shift();
+  activeChecks++;
+  fn().then(result => { resolve(result); }).catch(err => { resolve({ error: err }); }).finally(() => {
+    activeChecks--;
+    runNextInQueue();
   });
+}
+
+function queuedCheck(fn) {
+  return new Promise(resolve => {
+    checkQueue.push({ resolve, fn });
+    runNextInQueue();
+  });
+}
+
+let _browser = null;
+
+async function getBrowser() {
+  if (_browser && _browser.connected) return _browser;
+  _browser = await puppeteer.launch({
+    headless: true,
+    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu',
+           '--blink-settings=imagesEnabled=false', '--disable-extensions', '--disable-sync']
+  });
+  _browser.on('disconnected', () => { _browser = null; });
+  return _browser;
+}
+
+async function checkScriptInNetwork(pageUrl, scriptName) {
+  const browser = await getBrowser();
+  const page = await browser.newPage();
+  let found = false;
+
+  let earlyResolve;
+  const earlyExit = new Promise(r => { earlyResolve = r; });
+
+  page.on('request', request => {
+    if (request.url().toLowerCase().includes(scriptName.toLowerCase())) {
+      found = true;
+      earlyResolve();
+    }
+  });
+
   try {
-    const page = await browser.newPage();
-    let found = false;
-
-    page.on('request', (request) => {
-      if (request.url().toLowerCase().includes(scriptName.toLowerCase())) {
-        found = true;
-      }
-    });
-
-    await page.goto(pageUrl, { waitUntil: 'networkidle2', timeout: 30000 });
-
+    await Promise.race([
+      page.goto(pageUrl, { waitUntil: 'networkidle2', timeout: 30000 }).catch(() => {}),
+      earlyExit
+    ]);
     return found;
   } finally {
-    await browser.close();
+    await page.close();
   }
 }
 
@@ -60,7 +97,10 @@ router.post('/', async (req, res) => {
 
     const site = await Site.findOneAndUpdate(
       { host: cleanHost },
-      { host: cleanHost, campaign: cleanHost, always, cartExtra, script, scriptUrl, api, pixel, checkString },
+      {
+        $set: { always, cartExtra, script, scriptUrl, api, pixel, checkString },
+        $setOnInsert: { host: cleanHost, campaign: cleanHost }
+      },
       { upsert: true, new: true, runValidators: true }
     );
 
@@ -84,8 +124,9 @@ router.get('/:host/check', async (req, res) => {
     const checkPath = site.always ? '' : '/cart';
     const pageUrl = `https://${site.host}${checkPath}`;
 
-    const found = await checkScriptInNetwork(pageUrl, checkStr);
-    res.json({ success: true, found, checked: checkStr, page: pageUrl });
+    const result = await queuedCheck(() => checkScriptInNetwork(pageUrl, checkStr));
+    if (result && result.error) throw result.error;
+    res.json({ success: true, found: result, checked: checkStr, page: pageUrl });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }

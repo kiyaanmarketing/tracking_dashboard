@@ -97,28 +97,29 @@ function renderGrid(sites) {
 }
 
 // ── Search / filter ────────────────────────────────────────────────────────
+let _filterTimer = null;
 function filterSites() {
-  const q = document.getElementById('search-input').value.toLowerCase();
-  const filtered = allSites.filter(s =>
-    s.host.includes(q) || s.campaign.toLowerCase().includes(q)
-  );
-  renderGrid(filtered);
+  clearTimeout(_filterTimer);
+  _filterTimer = setTimeout(() => {
+    const q = document.getElementById('search-input').value.toLowerCase();
+    const filtered = allSites.filter(s =>
+      s.host.includes(q) || (s.campaign || '').toLowerCase().includes(q)
+    );
+    renderGrid(filtered);
+  }, 200);
 }
 
 // ── Show detail ────────────────────────────────────────────────────────────
 async function showDetail(host) {
   try {
-    const res = await fetch(API + '/' + host);
-    const json = await res.json();
-    if (!json.success) throw new Error(json.message);
-
-    const s = json.data;
+    const s = allSites.find(site => site.host === host);
+    if (!s) throw new Error('Site nahi mili');
     const mode = s.always && s.cartExtra ? 'always + cart (double fire)'
       : s.always ? 'always — har page pe'
       : 'sirf cart / checkout page pe';
 
     document.getElementById('detail-title').textContent = s.host;
-    document.getElementById('detail-sub').textContent = s.campaign + ' · ' + mode;
+    document.getElementById('detail-sub').textContent = mode;
     document.getElementById('detail-edit-btn').onclick = () => editSite(s.host);
 
     document.getElementById('detail-body').innerHTML = `
@@ -127,7 +128,6 @@ async function showDetail(host) {
         <div class="detail-card">
           <div class="detail-card-title">Site Info</div>
           <div class="drow"><span class="dl">Hostname</span><span class="dv">${s.host}</span></div>
-          <div class="drow"><span class="dl">Campaign</span><span class="dv"><span class="badge b-info">${s.campaign}</span></span></div>
           <div class="drow"><span class="dl">Fire mode</span><span class="dv">${mode}</span></div>
           <div class="drow"><span class="dl">always</span><span class="dv">${s.always ? '<span class="badge b-ok">true</span>' : '<span class="badge b-no">false</span>'}</span></div>
           <div class="drow"><span class="dl">cartExtra</span><span class="dv">${s.cartExtra ? '<span class="badge b-ok">true</span>' : '<span class="badge b-no">false</span>'}</span></div>
@@ -139,6 +139,7 @@ async function showDetail(host) {
           ${s.script || s.scriptUrl ? `
             <div class="drow"><span class="dl">Script naam</span><span class="dv">${s.script || '—'}</span></div>
             <div class="drow"><span class="dl">Script URL</span><span class="dv">${s.scriptUrl || '—'}</span></div>
+            <div class="drow"><span class="dl">Check String</span><span class="dv">${s.checkString || '<span style="color:var(--text3)">—</span>'}</span></div>
           ` : '<div style="padding:20px 16px;color:var(--text3);font-size:12px">Script details nahi di</div>'}
         </div>
 
@@ -220,6 +221,7 @@ async function saveSite() {
     if (!json.success) throw new Error(json.message);
 
     toast('✅ ' + host + ' save ho gaya');
+    delete scriptCheckCache[host];
     clearForm();
     editingHost = null;
     switchTab('list');
@@ -232,11 +234,8 @@ async function saveSite() {
 // ── Edit site ──────────────────────────────────────────────────────────────
 async function editSite(host) {
   try {
-    const res = await fetch(API + '/' + host);
-    const json = await res.json();
-    if (!json.success) throw new Error(json.message);
-
-    const s = json.data;
+    const s = allSites.find(site => site.host === host);
+    if (!s) throw new Error('Site nahi mili');
     editingHost = host;
 
     document.getElementById('f-host').value = s.host;
@@ -253,7 +252,6 @@ async function editSite(host) {
     document.getElementById('delete-btn').style.display = 'inline-flex';
 
     switchTab('add');
-    document.getElementById('nav-list').classList.add('active');
   } catch (err) {
     toast('❌ ' + err.message);
   }
@@ -358,7 +356,9 @@ async function checkAllScripts() {
   const btn = document.getElementById('check-all-btn');
   if (btn) { btn.disabled = true; btn.textContent = 'Checking…'; }
   const withScript = allSites.filter(s => s.scriptUrl || s.script);
-  await Promise.all(withScript.map(s => checkScript(s.host)));
+  for (const s of withScript) {
+    await checkScript(s.host);
+  }
   if (btn) { btn.disabled = false; btn.textContent = '⟳ Check All'; }
 }
 
