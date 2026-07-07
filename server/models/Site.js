@@ -40,6 +40,10 @@ const siteSchema = new mongoose.Schema({
   checkString: {
     type: String,
     default: null
+  },
+  checkUrl: {
+    type: String,
+    default: null
   }
 }, {
   timestamps: true

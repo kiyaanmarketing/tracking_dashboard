@@ -87,7 +87,7 @@ router.get('/:host', async (req, res) => {
 // POST create or update site (upsert)
 router.post('/', async (req, res) => {
   try {
-    const { host, always, cartExtra, script, scriptUrl, api, pixel, checkString } = req.body;
+    const { host, always, cartExtra, script, scriptUrl, api, pixel, checkString, checkUrl } = req.body;
 
     if (!host) {
       return res.status(400).json({ success: false, message: 'Host required hai' });
@@ -98,7 +98,7 @@ router.post('/', async (req, res) => {
     const site = await Site.findOneAndUpdate(
       { host: cleanHost },
       {
-        $set: { always, cartExtra, script, scriptUrl, api, pixel, checkString },
+        $set: { always, cartExtra, script, scriptUrl, api, pixel, checkString, checkUrl },
         $setOnInsert: { host: cleanHost, campaign: cleanHost }
       },
       { upsert: true, new: true, runValidators: true }
@@ -121,8 +121,7 @@ router.get('/:host/check', async (req, res) => {
       return res.json({ success: true, found: null, reason: 'no-script' });
     }
 
-    const checkPath = site.always ? '' : '/cart';
-    const pageUrl = `https://${site.host}${checkPath}`;
+    const pageUrl = site.checkUrl || (site.always ? `https://${site.host}` : `https://${site.host}/cart`);
 
     const result = await queuedCheck(() => checkScriptInNetwork(pageUrl, checkStr));
     if (result && result.error) throw result.error;

@@ -140,6 +140,7 @@ async function showDetail(host) {
             <div class="drow"><span class="dl">Script naam</span><span class="dv">${s.script || '—'}</span></div>
             <div class="drow"><span class="dl">Script URL</span><span class="dv">${s.scriptUrl || '—'}</span></div>
             <div class="drow"><span class="dl">Check String</span><span class="dv">${s.checkString || '<span style="color:var(--text3)">—</span>'}</span></div>
+            <div class="drow"><span class="dl">Check URL</span><span class="dv">${s.checkUrl || '<span style="color:var(--text3)">— (homepage)</span>'}</span></div>
           ` : '<div style="padding:20px 16px;color:var(--text3);font-size:12px">Script details nahi di</div>'}
         </div>
 
@@ -207,6 +208,7 @@ async function saveSite() {
     script:       document.getElementById('f-script').value.trim()       || null,
     scriptUrl:    document.getElementById('f-script-url').value.trim()    || null,
     checkString:  document.getElementById('f-check-string').value.trim()  || null,
+    checkUrl:     document.getElementById('f-check-url').value.trim()      || null,
     api:       document.getElementById('f-api').value.trim()        || null,
     pixel:     document.getElementById('f-pixel').value.trim()      || null,
   };
@@ -244,6 +246,7 @@ async function editSite(host) {
     document.getElementById('f-script').value = s.script || '';
     document.getElementById('f-script-url').value = s.scriptUrl || '';
     document.getElementById('f-check-string').value = s.checkString || '';
+    document.getElementById('f-check-url').value = s.checkUrl || '';
     document.getElementById('f-api').value = s.api || '';
     document.getElementById('f-pixel').value = s.pixel || '';
 
@@ -278,7 +281,7 @@ async function deleteSite() {
 
 // ── Clear form ─────────────────────────────────────────────────────────────
 function clearForm() {
-  ['f-host','f-script','f-script-url','f-check-string','f-api','f-pixel'].forEach(id => {
+  ['f-host','f-script','f-script-url','f-check-string','f-check-url','f-api','f-pixel'].forEach(id => {
     document.getElementById(id).value = '';
   });
   document.getElementById('f-host').readOnly = false;
