@@ -80,8 +80,7 @@ function renderGrid(sites) {
       : 'cart only';
     const badgeClass = s.always ? 'b-ok' : 'b-warn';
     const date = new Date(s.createdAt).toLocaleDateString('en-IN');
-    const cached = scriptCheckCache[s.host];
-    const checkBadge = checkBadgeHTML(cached ? cached.status : null, cached ? cached.msg : null);
+    const checkBadge = renderCheckBadges(scriptCheckCache[s.host]);
     const hasScript = !!(s.scriptUrl || s.script);
     const hostAttr = escapeHtml(s.host);
 
@@ -321,6 +320,7 @@ function clearForm() {
 }
 
 // ── Script live check ──────────────────────────────────────────────────────
+// Level 1: script mili ya nahi (network request).
 function checkBadgeHTML(status, msg) {
   if (!status)             return '<span class="check-badge check-none" title="Click ⟳ to check">—</span>';
   if (status === 'none')   return '<span class="check-badge check-none" title="Script URL set nahi ki">—</span>';
@@ -331,24 +331,39 @@ function checkBadgeHTML(status, msg) {
   return '';
 }
 
+// Level 2 — alag se badge, sirf tab dikhta hai jab script mil chuki ho (status
+// 'found'): script load hone ke baad khud chal bhi rahi hai (koi JS/console
+// error to nahi de rahi) ya nahi.
+function consoleBadgeHTML(hasErrors, errMsg) {
+  if (hasErrors) {
+    return `<span class="check-badge check-founderror" title="${escapeHtml(errMsg || 'Tag console error de rahi hai')}">⚠ JS Error</span>`;
+  }
+  return '<span class="check-badge check-found" title="Tag bina JS error ke chal rahi hai">✓ Working</span>';
+}
+
+function renderCheckBadges(cache) {
+  const c = cache || {};
+  let html = checkBadgeHTML(c.status, c.msg);
+  if (c.status === 'found') html += consoleBadgeHTML(c.hasErrors, c.errMsg);
+  return html;
+}
+
 function updateCardCheckUI(host) {
   const el = document.querySelector(`[data-host-check="${CSS.escape(host)}"]`);
   if (!el) return;
-  const c = scriptCheckCache[host] || {};
-  el.innerHTML = checkBadgeHTML(c.status, c.msg);
+  el.innerHTML = renderCheckBadges(scriptCheckCache[host]);
 }
 
 function updateDetailCheckUI(host) {
   const el = document.getElementById('detail-check-status');
   if (!el) return;
-  const c = scriptCheckCache[host] || {};
-  el.innerHTML = checkBadgeHTML(c.status, c.msg);
+  el.innerHTML = renderCheckBadges(scriptCheckCache[host]);
 }
 
 function detailCheckBadge(host) {
   const c = scriptCheckCache[host];
   if (!c) return '<span style="color:var(--text3);font-size:12px">— Click "Check Now" to verify</span>';
-  return checkBadgeHTML(c.status, c.msg);
+  return renderCheckBadges(c);
 }
 
 // Card badge aur detail-pane badge dono isi ek function se update hote hain —
@@ -365,8 +380,14 @@ async function runScriptCheck(host, { fromDetail = false } = {}) {
       scriptCheckCache[host] = { status: 'error', msg: json.message };
     } else if (json.found === null) {
       scriptCheckCache[host] = { status: 'none' };
+    } else if (!json.found) {
+      scriptCheckCache[host] = { status: 'missing' };
     } else {
-      scriptCheckCache[host] = { status: json.found ? 'found' : 'missing' };
+      scriptCheckCache[host] = {
+        status: 'found',
+        hasErrors: !!json.hasErrors,
+        errMsg: (json.errors || []).join(' | ')
+      };
     }
   } catch (err) {
     scriptCheckCache[host] = { status: 'error', msg: err.message };

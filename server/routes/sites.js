@@ -103,14 +103,34 @@ async function checkScriptInNetwork(pageUrl, scriptName) {
   await page.setUserAgent(DESKTOP_UA);
   let found = false;
   let navError = null;
+  const needle = scriptName.toLowerCase();
+  const tagErrors = [];
 
   let earlyResolve;
   const earlyExit = new Promise(r => { earlyResolve = r; });
 
   page.on('request', request => {
-    if (request.url().toLowerCase().includes(scriptName.toLowerCase())) {
+    if (request.url().toLowerCase().includes(needle)) {
       found = true;
       earlyResolve();
+    }
+  });
+
+  // Tag ka apna script jab console.error ya uncaught exception de, sirf wahi
+  // pakdo (location/stack mein scriptName match karke) — poore page ki har
+  // error nahi, warna kisi aur third-party script ka noise bhi "tag error"
+  // dikhne lagega.
+  page.on('console', msg => {
+    if (msg.type() !== 'error') return;
+    const loc = msg.location() || {};
+    if ((loc.url || '').toLowerCase().includes(needle)) {
+      tagErrors.push(msg.text());
+    }
+  });
+  page.on('pageerror', err => {
+    const stack = (err.stack || err.message || '').toLowerCase();
+    if (stack.includes(needle)) {
+      tagErrors.push(err.message);
     }
   });
 
@@ -124,7 +144,10 @@ async function checkScriptInNetwork(pageUrl, scriptName) {
     // Warna nav error ko "not found" mat treat karo — page hi load nahi hui to
     // pata nahi chalta script hai ya nahi, isliye error surface karna zaroori hai.
     if (!found && navError) throw navError;
-    return found;
+    // Early exit ke case mein script abhi-abhi request hui hai, execute/error
+    // hone ka mauka nahi mila — thoda ruk ke dekho.
+    if (found) await new Promise(r => setTimeout(r, 800));
+    return { found, tagErrors: tagErrors.slice(0, 5) };
   } finally {
     await page.close();
   }
@@ -231,7 +254,14 @@ router.get('/:host/check', async (req, res) => {
       console.error('GET /api/sites/:host/check nav failed:', navErr);
       return res.status(502).json({ success: false, message: msg });
     }
-    res.json({ success: true, found: result, checked: checkStr, page: pageUrl });
+    res.json({
+      success: true,
+      found: result.found,
+      hasErrors: result.tagErrors.length > 0,
+      errors: result.tagErrors,
+      checked: checkStr,
+      page: pageUrl
+    });
   } catch (err) {
     serverError(res, 'GET /api/sites/:host/check failed:', err);
   }
