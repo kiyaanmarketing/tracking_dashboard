@@ -109,10 +109,20 @@ async function checkScriptInNetwork(pageUrl, scriptName) {
   let earlyResolve;
   const earlyExit = new Promise(r => { earlyResolve = r; });
 
+  // Humein sirf JS network activity mein interest hai (script mili ya nahi) —
+  // visual rendering ki zaroorat nahi. CSS/fonts/media block karne se page
+  // kaafi tez "idle" ho jaata hai, isliye check bhi tez complete hota hai.
+  const BLOCKED_TYPES = new Set(['image', 'stylesheet', 'font', 'media']);
+  await page.setRequestInterception(true);
   page.on('request', request => {
     if (request.url().toLowerCase().includes(needle)) {
       found = true;
       earlyResolve();
+    }
+    if (BLOCKED_TYPES.has(request.resourceType())) {
+      request.abort().catch(() => {});
+    } else {
+      request.continue().catch(() => {});
     }
   });
 
@@ -144,9 +154,17 @@ async function checkScriptInNetwork(pageUrl, scriptName) {
     // Warna nav error ko "not found" mat treat karo — page hi load nahi hui to
     // pata nahi chalta script hai ya nahi, isliye error surface karna zaroori hai.
     if (!found && navError) throw navError;
-    // Early exit ke case mein script abhi-abhi request hui hai, execute/error
-    // hone ka mauka nahi mila — thoda ruk ke dekho.
-    if (found) await new Promise(r => setTimeout(r, 800));
+    if (found) {
+      // Early exit ke case mein script abhi-abhi request hui hai, execute/error
+      // hone ka mauka nahi mila — thoda ruk ke dekho.
+      await new Promise(r => setTimeout(r, 800));
+    } else {
+      // Bahut si tracking scripts jaan-boojhkar delay se (setTimeout/scroll/
+      // requestIdleCallback) load hoti hain taaki page-speed score na bigde —
+      // "networkidle2" us delay se PEHLE hi resolve ho jaata hai, isliye turant
+      // "not found" bolna false-negative deta hai. Thoda aur grace time do.
+      await Promise.race([earlyExit, new Promise(r => setTimeout(r, 4000))]);
+    }
     return { found, tagErrors: tagErrors.slice(0, 5) };
   } finally {
     await page.close();

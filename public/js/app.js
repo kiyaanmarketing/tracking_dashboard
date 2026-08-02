@@ -409,9 +409,10 @@ async function checkAllScripts() {
   const btn = document.getElementById('check-all-btn');
   if (btn) { btn.disabled = true; btn.textContent = 'Checking…'; }
   const withScript = allSites.filter(s => s.scriptUrl || s.script);
-  for (const s of withScript) {
-    await checkScript(s.host);
-  }
+  // Sab checks ek saath fire karo — backend apni queue (max 3 concurrent) se
+  // khud throttle karta hai, isliye sequential ek-ek karke wait karne ki
+  // zaroorat nahi.
+  await Promise.all(withScript.map(s => checkScript(s.host)));
   if (btn) { btn.disabled = false; btn.textContent = '⟳ Check All'; }
 }
 
