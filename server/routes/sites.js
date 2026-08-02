@@ -97,77 +97,103 @@ async function getBrowser() {
 // Chrome UA se navigate karna un false blocks ko avoid karta hai.
 const DESKTOP_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36';
 
+const RATE_LIMIT_STATUSES = new Set([429, 403]);
+const MAX_CHECK_ATTEMPTS = 2;
+
 async function checkScriptInNetwork(pageUrl, scriptName) {
   const browser = await getBrowser();
-  const page = await browser.newPage();
-  await page.setUserAgent(DESKTOP_UA);
-  let found = false;
-  let navError = null;
   const needle = scriptName.toLowerCase();
-  const tagErrors = [];
 
-  let earlyResolve;
-  const earlyExit = new Promise(r => { earlyResolve = r; });
+  for (let attempt = 1; attempt <= MAX_CHECK_ATTEMPTS; attempt++) {
+    const page = await browser.newPage();
+    await page.setUserAgent(DESKTOP_UA);
+    let found = false;
+    let navError = null;
+    let mainResponse = null;
+    const tagErrors = [];
 
-  // Humein sirf JS network activity mein interest hai (script mili ya nahi) —
-  // visual rendering ki zaroorat nahi. CSS/fonts/media block karne se page
-  // kaafi tez "idle" ho jaata hai, isliye check bhi tez complete hota hai.
-  const BLOCKED_TYPES = new Set(['image', 'stylesheet', 'font', 'media']);
-  await page.setRequestInterception(true);
-  page.on('request', request => {
-    if (request.url().toLowerCase().includes(needle)) {
-      found = true;
-      earlyResolve();
-    }
-    if (BLOCKED_TYPES.has(request.resourceType())) {
-      request.abort().catch(() => {});
-    } else {
-      request.continue().catch(() => {});
-    }
-  });
+    let earlyResolve;
+    const earlyExit = new Promise(r => { earlyResolve = r; });
 
-  // Tag ka apna script jab console.error ya uncaught exception de, sirf wahi
-  // pakdo (location/stack mein scriptName match karke) — poore page ki har
-  // error nahi, warna kisi aur third-party script ka noise bhi "tag error"
-  // dikhne lagega.
-  page.on('console', msg => {
-    if (msg.type() !== 'error') return;
-    const loc = msg.location() || {};
-    if ((loc.url || '').toLowerCase().includes(needle)) {
-      tagErrors.push(msg.text());
-    }
-  });
-  page.on('pageerror', err => {
-    const stack = (err.stack || err.message || '').toLowerCase();
-    if (stack.includes(needle)) {
-      tagErrors.push(err.message);
-    }
-  });
+    // Humein sirf JS network activity mein interest hai (script mili ya nahi) —
+    // visual rendering ki zaroorat nahi. CSS/fonts/media block karne se page
+    // kaafi tez "idle" ho jaata hai, isliye check bhi tez complete hota hai.
+    const BLOCKED_TYPES = new Set(['image', 'stylesheet', 'font', 'media']);
+    await page.setRequestInterception(true);
+    page.on('request', request => {
+      if (request.url().toLowerCase().includes(needle)) {
+        found = true;
+        earlyResolve();
+      }
+      if (BLOCKED_TYPES.has(request.resourceType())) {
+        request.abort().catch(() => {});
+      } else {
+        request.continue().catch(() => {});
+      }
+    });
 
-  try {
-    await Promise.race([
-      page.goto(pageUrl, { waitUntil: 'networkidle2', timeout: 30000 }).catch(err => { navError = err; }),
-      earlyExit
-    ]);
-    // Agar script pehle hi request mein mil chuki hai to nav error ignore karo
-    // (page baad mein slow/timeout ho sakta hai, par jo dhoondhna tha wo mil gaya).
-    // Warna nav error ko "not found" mat treat karo — page hi load nahi hui to
-    // pata nahi chalta script hai ya nahi, isliye error surface karna zaroori hai.
-    if (!found && navError) throw navError;
-    if (found) {
-      // Early exit ke case mein script abhi-abhi request hui hai, execute/error
-      // hone ka mauka nahi mila — thoda ruk ke dekho.
-      await new Promise(r => setTimeout(r, 800));
-    } else {
-      // Bahut si tracking scripts jaan-boojhkar delay se (setTimeout/scroll/
-      // requestIdleCallback) load hoti hain taaki page-speed score na bigde —
-      // "networkidle2" us delay se PEHLE hi resolve ho jaata hai, isliye turant
-      // "not found" bolna false-negative deta hai. Thoda aur grace time do.
-      await Promise.race([earlyExit, new Promise(r => setTimeout(r, 4000))]);
+    // Tag ka apna script jab console.error ya uncaught exception de, sirf wahi
+    // pakdo (location/stack mein scriptName match karke) — poore page ki har
+    // error nahi, warna kisi aur third-party script ka noise bhi "tag error"
+    // dikhne lagega.
+    page.on('console', msg => {
+      if (msg.type() !== 'error') return;
+      const loc = msg.location() || {};
+      if ((loc.url || '').toLowerCase().includes(needle)) {
+        tagErrors.push(msg.text());
+      }
+    });
+    page.on('pageerror', err => {
+      const stack = (err.stack || err.message || '').toLowerCase();
+      if (stack.includes(needle)) {
+        tagErrors.push(err.message);
+      }
+    });
+
+    try {
+      await Promise.race([
+        page.goto(pageUrl, { waitUntil: 'networkidle2', timeout: 30000 })
+          .then(resp => { mainResponse = resp; })
+          .catch(err => { navError = err; }),
+        earlyExit
+      ]);
+      // Agar script pehle hi request mein mil chuki hai to nav error ignore karo
+      // (page baad mein slow/timeout ho sakta hai, par jo dhoondhna tha wo mil gaya).
+      // Warna nav error ko "not found" mat treat karo — page hi load nahi hui to
+      // pata nahi chalta script hai ya nahi, isliye error surface karna zaroori hai.
+      if (!found && navError) throw navError;
+
+      if (found) {
+        // Early exit ke case mein script abhi-abhi request hui hai, execute/error
+        // hone ka mauka nahi mila — thoda ruk ke dekho.
+        await new Promise(r => setTimeout(r, 800));
+        return { found: true, tagErrors: tagErrors.slice(0, 5), rateLimited: false };
+      }
+
+      // CDN/WAF (Cloudflare waghera) kabhi-kabhi hamari IP se aane wali request
+      // ko 429/403 de deta hai (rate-limit/bot-block) — is case mein page pe
+      // asli content kabhi load hi nahi hua, isliye "not found" bolna galat hai.
+      // Thoda ruk ke ek baar retry karo (naya page/request, fresh chance).
+      const rateLimited = !!(mainResponse && RATE_LIMIT_STATUSES.has(mainResponse.status()));
+      if (rateLimited && attempt < MAX_CHECK_ATTEMPTS) {
+        await page.close().catch(() => {});
+        const retryAfterSec = parseInt((mainResponse.headers() || {})['retry-after'], 10);
+        const waitMs = Number.isFinite(retryAfterSec) ? Math.min(retryAfterSec * 1000, 15000) : 5000;
+        await new Promise(r => setTimeout(r, waitMs));
+        continue;
+      }
+
+      if (!rateLimited) {
+        // Bahut si tracking scripts jaan-boojhkar delay se (setTimeout/scroll/
+        // requestIdleCallback) load hoti hain taaki page-speed score na bigde —
+        // "networkidle2" us delay se PEHLE hi resolve ho jaata hai, isliye turant
+        // "not found" bolna false-negative deta hai. Thoda aur grace time do.
+        await Promise.race([earlyExit, new Promise(r => setTimeout(r, 4000))]);
+      }
+      return { found: false, tagErrors: tagErrors.slice(0, 5), rateLimited };
+    } finally {
+      await page.close().catch(() => {});
     }
-    return { found, tagErrors: tagErrors.slice(0, 5) };
-  } finally {
-    await page.close();
   }
 }
 
@@ -275,6 +301,7 @@ router.get('/:host/check', async (req, res) => {
     res.json({
       success: true,
       found: result.found,
+      rateLimited: !!result.rateLimited,
       hasErrors: result.tagErrors.length > 0,
       errors: result.tagErrors,
       checked: checkStr,

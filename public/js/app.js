@@ -327,6 +327,7 @@ function checkBadgeHTML(status, msg) {
   if (status === 'checking') return '<span class="check-badge check-checking">⟳ Checking…</span>';
   if (status === 'found')  return '<span class="check-badge check-found">✓ Live</span>';
   if (status === 'missing') return '<span class="check-badge check-missing">✗ Not Found</span>';
+  if (status === 'ratelimited') return '<span class="check-badge check-error" title="CDN/WAF ne temporarily rate-limit kar diya — script ka pata nahi chala, thodi der baad phir try karo">⚠ Rate Limited</span>';
   if (status === 'error')  return `<span class="check-badge check-error" title="${escapeHtml(msg || '')}">⚠ Error</span>`;
   return '';
 }
@@ -381,7 +382,7 @@ async function runScriptCheck(host, { fromDetail = false } = {}) {
     } else if (json.found === null) {
       scriptCheckCache[host] = { status: 'none' };
     } else if (!json.found) {
-      scriptCheckCache[host] = { status: 'missing' };
+      scriptCheckCache[host] = json.rateLimited ? { status: 'ratelimited' } : { status: 'missing' };
     } else {
       scriptCheckCache[host] = {
         status: 'found',
