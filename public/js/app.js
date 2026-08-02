@@ -3,6 +3,19 @@ let allSites = [];
 let editingHost = null;
 const scriptCheckCache = {};
 
+// ── HTML escaping ─────────────────────────────────────────────────────────
+// Saara site data (host/script/api/pixel/etc) DB se aata hai aur user-editable
+// hai — kabhi bhi innerHTML mein raw interpolate mat karo, warna stored XSS.
+function escapeHtml(str) {
+  if (str === null || str === undefined) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 // ── Toast ──────────────────────────────────────────────────────────────────
 function toast(msg) {
   const t = document.getElementById('toast');
@@ -45,7 +58,7 @@ async function loadSites() {
     document.getElementById('db-status').className = 'db-badge connected';
     renderGrid(allSites);
   } catch (err) {
-    grid.innerHTML = '<div class="loading" style="color:#f87171">❌ Load nahi hua: ' + err.message + '</div>';
+    grid.innerHTML = '<div class="loading" style="color:#f87171">❌ Load nahi hua: ' + escapeHtml(err.message) + '</div>';
     document.getElementById('db-status').textContent = '● DB Error';
     document.getElementById('db-status').className = 'db-badge error';
   }
@@ -70,31 +83,45 @@ function renderGrid(sites) {
     const cached = scriptCheckCache[s.host];
     const checkBadge = checkBadgeHTML(cached ? cached.status : null, cached ? cached.msg : null);
     const hasScript = !!(s.scriptUrl || s.script);
+    const hostAttr = escapeHtml(s.host);
 
     return `
-      <div class="site-card" onclick="showDetail('${s.host}')">
+      <div class="site-card" data-action="detail" data-host="${hostAttr}">
         <div class="site-card-top">
           <div>
-            <div class="site-host">${s.host}</div>
+            <div class="site-host">${escapeHtml(s.host)}</div>
           </div>
           <span class="badge ${badgeClass}">${mode}</span>
         </div>
         <div class="site-card-tags">
-          ${s.script ? `<span class="tag tag-script">${s.script}</span>` : ''}
+          ${s.script ? `<span class="tag tag-script">${escapeHtml(s.script)}</span>` : ''}
           ${s.api ? `<span class="tag tag-api">custom API</span>` : ''}
           ${!s.script && !s.api ? `<span class="tag tag-none">no script/api</span>` : ''}
         </div>
         <div class="site-card-bottom">
           <span class="site-card-date">Added ${date}</span>
           <div class="check-row">
-            <span data-host-check="${s.host}">${checkBadge}</span>
-            ${hasScript ? `<button class="btn-check" onclick="event.stopPropagation(); checkScript('${s.host}')">⟳</button>` : ''}
-            <button class="btn-check" style="padding:2px 10px;font-size:11px" onclick="event.stopPropagation(); editSite('${s.host}')">Edit</button>
+            <span data-host-check="${hostAttr}">${checkBadge}</span>
+            ${hasScript ? `<button class="btn-check" data-action="check" data-host="${hostAttr}">⟳</button>` : ''}
+            <button class="btn-check" style="padding:2px 10px;font-size:11px" data-action="edit" data-host="${hostAttr}">Edit</button>
           </div>
         </div>
       </div>`;
   }).join('');
 }
+
+// Grid pe ek hi delegated listener — cards/buttons ke andar kabhi bhi user data
+// se onclick string mat banao (HTML-attribute decode JS-injection ko undo kar
+// deta hai), isliye data-action/data-host + closest() use karo.
+document.getElementById('sites-grid').addEventListener('click', (e) => {
+  const el = e.target.closest('[data-action]');
+  if (!el) return;
+  const host = el.dataset.host;
+  const action = el.dataset.action;
+  if (action === 'check') checkScript(host);
+  else if (action === 'edit') editSite(host);
+  else if (action === 'detail') showDetail(host);
+});
 
 // ── Search / filter ────────────────────────────────────────────────────────
 let _filterTimer = null;
@@ -127,7 +154,7 @@ async function showDetail(host) {
 
         <div class="detail-card">
           <div class="detail-card-title">Site Info</div>
-          <div class="drow"><span class="dl">Hostname</span><span class="dv">${s.host}</span></div>
+          <div class="drow"><span class="dl">Hostname</span><span class="dv">${escapeHtml(s.host)}</span></div>
           <div class="drow"><span class="dl">Fire mode</span><span class="dv">${mode}</span></div>
           <div class="drow"><span class="dl">always</span><span class="dv">${s.always ? '<span class="badge b-ok">true</span>' : '<span class="badge b-no">false</span>'}</span></div>
           <div class="drow"><span class="dl">cartExtra</span><span class="dv">${s.cartExtra ? '<span class="badge b-ok">true</span>' : '<span class="badge b-no">false</span>'}</span></div>
@@ -137,22 +164,22 @@ async function showDetail(host) {
         <div class="detail-card">
           <div class="detail-card-title">Script</div>
           ${s.script || s.scriptUrl ? `
-            <div class="drow"><span class="dl">Script naam</span><span class="dv">${s.script || '—'}</span></div>
-            <div class="drow"><span class="dl">Script URL</span><span class="dv">${s.scriptUrl || '—'}</span></div>
-            <div class="drow"><span class="dl">Check String</span><span class="dv">${s.checkString || '<span style="color:var(--text3)">—</span>'}</span></div>
-            <div class="drow"><span class="dl">Check URL</span><span class="dv">${s.checkUrl || '<span style="color:var(--text3)">— (homepage)</span>'}</span></div>
+            <div class="drow"><span class="dl">Script naam</span><span class="dv">${escapeHtml(s.script) || '—'}</span></div>
+            <div class="drow"><span class="dl">Script URL</span><span class="dv">${escapeHtml(s.scriptUrl) || '—'}</span></div>
+            <div class="drow"><span class="dl">Check String</span><span class="dv">${s.checkString ? escapeHtml(s.checkString) : '<span style="color:var(--text3)">—</span>'}</span></div>
+            <div class="drow"><span class="dl">Check URL</span><span class="dv">${s.checkUrl ? escapeHtml(s.checkUrl) : '<span style="color:var(--text3)">— (homepage)</span>'}</span></div>
           ` : '<div style="padding:20px 16px;color:var(--text3);font-size:12px">Script details nahi di</div>'}
         </div>
 
         <div class="detail-card" style="grid-column: 1 / -1">
           <div class="detail-card-title" style="display:flex;align-items:center;justify-content:space-between">
             <span>Script Live Check</span>
-            ${(s.scriptUrl || s.script) ? `<button class="btn-check" style="font-size:11px;padding:3px 10px" onclick="checkScriptInDetail('${s.host}')">⟳ Check Now</button>` : ''}
+            ${(s.scriptUrl || s.script) ? `<button class="btn-check" id="detail-check-btn" style="font-size:11px;padding:3px 10px">⟳ Check Now</button>` : ''}
           </div>
           ${(s.scriptUrl || s.script) ? `
             <div class="drow">
               <span class="dl">Checking</span>
-              <span class="dv" style="font-size:11px;color:var(--text3)">${s.scriptUrl || s.script}</span>
+              <span class="dv" style="font-size:11px;color:var(--text3)">${escapeHtml(s.scriptUrl || s.script)}</span>
             </div>
             <div class="drow">
               <span class="dl">Status</span>
@@ -166,20 +193,23 @@ async function showDetail(host) {
           ${s.api ? `
             <div class="api-block">
               <span class="api-method">POST</span>&nbsp;
-              <span class="api-url">${s.api}</span><br>
+              <span class="api-url">${escapeHtml(s.api)}</span><br>
               {<br>
-              &nbsp;&nbsp;<span class="api-key">url:</span> <span class="api-val">"https://${s.host}/..."</span>,<br>
-              &nbsp;&nbsp;<span class="api-key">origin:</span> <span class="api-val">"${s.host}"</span>,<br>
+              &nbsp;&nbsp;<span class="api-key">url:</span> <span class="api-val">"https://${escapeHtml(s.host)}/..."</span>,<br>
+              &nbsp;&nbsp;<span class="api-key">origin:</span> <span class="api-val">"${escapeHtml(s.host)}"</span>,<br>
               &nbsp;&nbsp;<span class="api-key">unique_id:</span> <span class="api-val">"&lt;tracking_uuid&gt;"</span>,<br>
               &nbsp;&nbsp;<span class="api-key">referrer:</span> <span class="api-val">"&lt;document.referrer&gt;"</span>,<br>
               &nbsp;&nbsp;<span class="api-key">timestamp:</span> <span class="api-val">&lt;Date.now()&gt;</span><br>
               }
             </div>
-            ${s.pixel ? `<div class="drow"><span class="dl">Pixel URL</span><span class="dv">${s.pixel}</span></div>` : ''}
+            ${s.pixel ? `<div class="drow"><span class="dl">Pixel URL</span><span class="dv">${escapeHtml(s.pixel)}</span></div>` : ''}
           ` : '<div style="padding:20px 16px;color:var(--text3);font-size:12px">API details nahi di — default use hogi</div>'}
         </div>
 
       </div>`;
+
+    const checkBtn = document.getElementById('detail-check-btn');
+    if (checkBtn) checkBtn.onclick = () => checkScriptInDetail(s.host);
 
     switchTab('detail');
   } catch (err) {
@@ -266,7 +296,7 @@ async function deleteSite() {
   if (!confirm(editingHost + ' ko delete karna chahte ho?')) return;
 
   try {
-    const res = await fetch(API + '/' + editingHost, { method: 'DELETE' });
+    const res = await fetch(API + '/' + encodeURIComponent(editingHost), { method: 'DELETE' });
     const json = await res.json();
     if (!json.success) throw new Error(json.message);
 
@@ -297,12 +327,19 @@ function checkBadgeHTML(status, msg) {
   if (status === 'checking') return '<span class="check-badge check-checking">⟳ Checking…</span>';
   if (status === 'found')  return '<span class="check-badge check-found">✓ Live</span>';
   if (status === 'missing') return '<span class="check-badge check-missing">✗ Not Found</span>';
-  if (status === 'error')  return `<span class="check-badge check-error" title="${msg || ''}">⚠ Error</span>`;
+  if (status === 'error')  return `<span class="check-badge check-error" title="${escapeHtml(msg || '')}">⚠ Error</span>`;
   return '';
 }
 
 function updateCardCheckUI(host) {
-  const el = document.querySelector(`[data-host-check="${host}"]`);
+  const el = document.querySelector(`[data-host-check="${CSS.escape(host)}"]`);
+  if (!el) return;
+  const c = scriptCheckCache[host] || {};
+  el.innerHTML = checkBadgeHTML(c.status, c.msg);
+}
+
+function updateDetailCheckUI(host) {
+  const el = document.getElementById('detail-check-status');
   if (!el) return;
   const c = scriptCheckCache[host] || {};
   el.innerHTML = checkBadgeHTML(c.status, c.msg);
@@ -314,12 +351,15 @@ function detailCheckBadge(host) {
   return checkBadgeHTML(c.status, c.msg);
 }
 
-async function checkScriptInDetail(host) {
-  document.getElementById('detail-check-status').innerHTML = checkBadgeHTML('checking');
+// Card badge aur detail-pane badge dono isi ek function se update hote hain —
+// caller sirf batata hai check kis se trigger hui (list card ya detail pane).
+async function runScriptCheck(host, { fromDetail = false } = {}) {
   scriptCheckCache[host] = { status: 'checking' };
   updateCardCheckUI(host);
+  if (fromDetail) updateDetailCheckUI(host);
+
   try {
-    const res = await fetch(`${API}/${host}/check`);
+    const res = await fetch(`${API}/${encodeURIComponent(host)}/check`);
     const json = await res.json();
     if (!json.success) {
       scriptCheckCache[host] = { status: 'error', msg: json.message };
@@ -331,28 +371,17 @@ async function checkScriptInDetail(host) {
   } catch (err) {
     scriptCheckCache[host] = { status: 'error', msg: err.message };
   }
-  const el = document.getElementById('detail-check-status');
-  if (el) el.innerHTML = checkBadgeHTML(scriptCheckCache[host].status, scriptCheckCache[host].msg);
+
   updateCardCheckUI(host);
+  if (fromDetail) updateDetailCheckUI(host);
 }
 
-async function checkScript(host) {
-  scriptCheckCache[host] = { status: 'checking' };
-  updateCardCheckUI(host);
-  try {
-    const res = await fetch(`${API}/${host}/check`);
-    const json = await res.json();
-    if (!json.success) {
-      scriptCheckCache[host] = { status: 'error', msg: json.message };
-    } else if (json.found === null) {
-      scriptCheckCache[host] = { status: 'none' };
-    } else {
-      scriptCheckCache[host] = { status: json.found ? 'found' : 'missing' };
-    }
-  } catch (err) {
-    scriptCheckCache[host] = { status: 'error', msg: err.message };
-  }
-  updateCardCheckUI(host);
+function checkScript(host) {
+  return runScriptCheck(host);
+}
+
+function checkScriptInDetail(host) {
+  return runScriptCheck(host, { fromDetail: true });
 }
 
 async function checkAllScripts() {
