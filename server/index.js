@@ -15,6 +15,7 @@ app.use(express.static(path.join(__dirname, '../public')));
 
 // Routes
 app.use('/api/sites', require('./routes/sites'));
+app.use('/api/analytics', require('./routes/analytics'));
 
 // Frontend ke liye catch-all
 app.get('*', (req, res) => {

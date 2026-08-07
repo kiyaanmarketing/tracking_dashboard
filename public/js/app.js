@@ -19,6 +19,9 @@ function switchTab(name) {
   const navBtn = document.getElementById('nav-' + name);
   if (navBtn) navBtn.classList.add('active');
 
+  if (name === 'analytics') {
+    loadAnalytics();
+  }
   if (name === 'list') {
     loadSites();
     editingHost = null;
@@ -28,6 +31,101 @@ function switchTab(name) {
     document.getElementById('form-sub').textContent = 'Nayi tracking site add karo';
     document.getElementById('delete-btn').style.display = 'none';
   }
+}
+
+// ── Analytics ──────────────────────────────────────────────────────────────
+function escapeHtml(v) {
+  return String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function fmtNum(n) { return (n || 0).toLocaleString('en-IN'); }
+
+async function loadAnalytics() {
+  const site = document.getElementById('a-site-filter').value;
+  const totalEl = document.getElementById('a-total');
+  const todayEl = document.getElementById('a-today');
+
+  try {
+    const res = await fetch('/api/analytics/overview' + (site ? `?site=${encodeURIComponent(site)}` : ''));
+    const json = await res.json();
+    if (!json.success) throw new Error(json.message);
+
+    totalEl.textContent = fmtNum(json.totalClicks);
+    todayEl.textContent = fmtNum(json.todayClicks);
+    document.getElementById('a-tracked-count').textContent = json.allSites.length;
+    document.getElementById('a-untracked-count').textContent = json.untrackedSites.length;
+
+    // populate site filter (once, preserving current selection)
+    const filterEl = document.getElementById('a-site-filter');
+    if (filterEl.dataset.populated !== '1') {
+      const all = [...json.allSites, ...json.untrackedSites].sort();
+      filterEl.innerHTML = '<option value="">All tracked sites</option>' +
+        all.map(s => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join('');
+      filterEl.dataset.populated = '1';
+    }
+
+    renderBars('a-by-site', json.bySite, json.totalClicks);
+    renderBars('a-by-country', json.byCountry, json.totalClicks);
+    renderRecent(json.recent);
+    renderUntracked(json.untrackedSites);
+  } catch (err) {
+    totalEl.textContent = '—';
+    todayEl.textContent = '—';
+    document.getElementById('a-by-site').innerHTML = `<div class="loading" style="color:#f87171">❌ ${escapeHtml(err.message)}</div>`;
+    document.getElementById('a-by-country').innerHTML = '';
+    document.getElementById('a-recent').innerHTML = '';
+  }
+}
+
+function renderBars(elId, rows, total) {
+  const el = document.getElementById(elId);
+  if (!rows.length) {
+    el.innerHTML = '<div class="loading">Koi data nahi</div>';
+    return;
+  }
+  const max = Math.max(...rows.map(r => r.count), 1);
+  el.innerHTML = rows.slice(0, 15).map(r => `
+    <div class="bar-row">
+      <div class="bar-row-top">
+        <span class="bar-row-name">${escapeHtml(r.name)}</span>
+        <span class="bar-row-count">${fmtNum(r.count)}</span>
+      </div>
+      <div class="bar-track"><div class="bar-fill" style="width:${Math.max((r.count / max) * 100, 3)}%"></div></div>
+    </div>`).join('');
+}
+
+function renderRecent(rows) {
+  const el = document.getElementById('a-recent');
+  if (!rows.length) {
+    el.innerHTML = '<div class="loading">Abhi tak koi click record nahi</div>';
+    return;
+  }
+  el.innerHTML = `
+    <table>
+      <thead><tr><th>Site</th><th>Source</th><th>URL</th><th>Country</th><th>Time</th></tr></thead>
+      <tbody>
+        ${rows.map(r => `
+          <tr>
+            <td>${escapeHtml(r.origin || '—')}</td>
+            <td><span class="src-tag">${escapeHtml(r.source)}</span></td>
+            <td style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeHtml(r.url || '')}">${escapeHtml(r.url || '—')}</td>
+            <td>${escapeHtml(r.country || '—')}</td>
+            <td style="color:var(--text2);white-space:nowrap">${new Date(r.timestamp).toLocaleString('en-IN')}</td>
+          </tr>`).join('')}
+      </tbody>
+    </table>`;
+}
+
+function renderUntracked(hosts) {
+  const card = document.getElementById('a-untracked-card');
+  const list = document.getElementById('a-untracked-list');
+  if (!hosts.length) {
+    card.classList.add('hidden');
+    return;
+  }
+  card.classList.remove('hidden');
+  list.innerHTML = 'Yeh sites registry mein configured hain lekin inke backend mein click-logging nahi hai, isliye data nahi dikhega: <br><br>' +
+    hosts.map(h => `<span class="tag tag-none" style="margin:2px">${escapeHtml(h)}</span>`).join(' ');
 }
 
 // ── Load all sites ─────────────────────────────────────────────────────────
@@ -366,4 +464,5 @@ async function checkAllScripts() {
 }
 
 // ── Init ───────────────────────────────────────────────────────────────────
+loadAnalytics();
 loadSites();

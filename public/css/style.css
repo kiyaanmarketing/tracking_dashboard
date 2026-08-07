@@ -340,6 +340,54 @@ body {
 }
 
 .loading { padding: 40px; text-align: center; color: var(--text3); font-size: 13px; }
+.hidden { display: none !important; }
+
+/* ANALYTICS */
+.stat-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+}
+.stat-tile {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px 18px;
+}
+.stat-label { font-size: 11px; color: var(--text2); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 8px; }
+.stat-value { font-size: 26px; font-weight: 700; color: var(--text); }
+.stat-value.accent { color: var(--accent); }
+.stat-value.warn { color: var(--warn); }
+
+#a-site-filter {
+  padding: 8px 12px;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: 12px;
+  font-family: inherit;
+}
+
+.bar-list { padding: 8px 16px 16px; }
+.bar-row { padding: 9px 0; border-bottom: 1px solid var(--border); }
+.bar-row:last-child { border-bottom: none; }
+.bar-row-top { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 6px; }
+.bar-row-name { color: var(--text); word-break: break-all; padding-right: 10px; }
+.bar-row-count { color: var(--text2); flex-shrink: 0; font-weight: 600; }
+.bar-track { height: 5px; background: var(--bg3); border-radius: 99px; overflow: hidden; }
+.bar-fill { height: 100%; background: var(--accent); border-radius: 99px; }
+
+.recent-table { overflow-x: auto; }
+.recent-table table { width: 100%; border-collapse: collapse; font-size: 12px; min-width: 640px; }
+.recent-table th {
+  text-align: left; padding: 10px 16px; color: var(--text2); font-weight: 600;
+  text-transform: uppercase; font-size: 10px; letter-spacing: .05em;
+  border-bottom: 1px solid var(--border); background: var(--bg3);
+}
+.recent-table td { padding: 9px 16px; border-bottom: 1px solid var(--border); color: var(--text); }
+.recent-table tr:last-child td { border-bottom: none; }
+.src-tag { font-size: 10px; padding: 2px 7px; border-radius: 4px; background: var(--info-dim); color: var(--info); white-space: nowrap; }
 
 /* TOAST */
 .toast {
