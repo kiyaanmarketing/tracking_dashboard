@@ -2,6 +2,8 @@ const API = '/api/sites';
 let allSites = [];
 let editingHost = null;
 const scriptCheckCache = {};
+let recentPage = 1;
+const RECENT_PAGE_SIZE = 25;
 
 // ── HTML escaping ─────────────────────────────────────────────────────────
 // Saara site data (host/script/api/pixel/etc) DB se aata hai aur user-editable
@@ -75,8 +77,9 @@ async function loadAnalytics() {
 
     renderBars('a-by-site', json.bySite, json.totalClicks);
     renderBars('a-by-country', json.byCountry, json.totalClicks);
-    renderRecent(json.recent);
     renderUntracked(json.untrackedSites);
+    recentPage = 1;
+    loadRecent();
   } catch (err) {
     totalEl.textContent = '—';
     todayEl.textContent = '—';
@@ -84,6 +87,46 @@ async function loadAnalytics() {
     document.getElementById('a-by-country').innerHTML = '';
     document.getElementById('a-recent').innerHTML = '';
   }
+}
+
+// ── Recent activity (paginated) ─────────────────────────────────────────────
+async function loadRecent() {
+  const el = document.getElementById('a-recent');
+  const site = document.getElementById('a-site-filter').value;
+
+  try {
+    const params = new URLSearchParams({ page: recentPage, pageSize: RECENT_PAGE_SIZE });
+    if (site) params.set('site', site);
+
+    const res = await fetch('/api/analytics/recent?' + params.toString());
+    const json = await res.json();
+    if (!json.success) throw new Error(json.message);
+
+    renderRecent(json.rows);
+    renderRecentPagination(json);
+  } catch (err) {
+    el.innerHTML = `<div class="loading" style="color:#f87171">❌ ${escapeHtml(err.message)}</div>`;
+    document.getElementById('a-recent-pagination').innerHTML = '';
+  }
+}
+
+function goToRecentPage(page, totalPages) {
+  recentPage = Math.min(Math.max(page, 1), totalPages);
+  loadRecent();
+}
+
+function renderRecentPagination({ page, totalPages, total }) {
+  const el = document.getElementById('a-recent-pagination');
+  if (!total) {
+    el.innerHTML = '';
+    return;
+  }
+  el.innerHTML = `
+    <span class="count-badge">${fmtNum(total)} record${total !== 1 ? 's' : ''} — page ${page} of ${totalPages}</span>
+    <div style="display:flex;gap:6px">
+      <button class="btn-ghost" style="padding:4px 12px;font-size:11px" ${page <= 1 ? 'disabled' : ''} onclick="goToRecentPage(${page - 1}, ${totalPages})">← Prev</button>
+      <button class="btn-ghost" style="padding:4px 12px;font-size:11px" ${page >= totalPages ? 'disabled' : ''} onclick="goToRecentPage(${page + 1}, ${totalPages})">Next →</button>
+    </div>`;
 }
 
 function renderBars(elId, rows, total) {
@@ -117,13 +160,32 @@ function renderRecent(rows) {
           <tr>
             <td>${escapeHtml(r.origin || '—')}</td>
             <td><span class="src-tag">${escapeHtml(r.source)}</span></td>
-            <td><div class="url-scroll" title="${escapeHtml(r.url || '')}">${escapeHtml(r.url || '—')}</div></td>
+            <td>
+              <div class="url-cell">
+                <div class="url-scroll" title="${escapeHtml(r.url || '')}">${escapeHtml(r.url || '—')}</div>
+                ${r.url ? `<button class="btn-copy" data-action="copy-url" data-url="${escapeHtml(r.url)}" title="Copy URL">⧉</button>` : ''}
+              </div>
+            </td>
             <td>${escapeHtml(r.country || '—')}</td>
             <td style="color:var(--text2);white-space:nowrap">${new Date(r.timestamp).toLocaleString('en-IN')}</td>
           </tr>`).join('')}
       </tbody>
     </table>`;
 }
+
+// URL text saara user-editable click data se aata hai — copy button pe raw
+// value ko onclick string mein mat daalo, data-url attribute se hi padho
+// (decode HTML entities apne aap ho jaata hai attribute read karte waqt).
+document.getElementById('a-recent').addEventListener('click', async (e) => {
+  const btn = e.target.closest('[data-action="copy-url"]');
+  if (!btn) return;
+  try {
+    await navigator.clipboard.writeText(btn.dataset.url);
+    toast('✅ URL copied');
+  } catch (err) {
+    toast('❌ Copy nahi hua: ' + err.message);
+  }
+});
 
 function renderUntracked(hosts) {
   const card = document.getElementById('a-untracked-card');

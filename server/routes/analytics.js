@@ -23,6 +23,58 @@ function mergeCounts(...groups) {
     .sort((a, b) => b.count - a.count);
 }
 
+// How far back "Recent Activity" pagination reaches, per source — keeps the
+// merge-sort cheap instead of pulling a site's entire click history.
+const RECENT_POOL_LIMIT = 1000;
+
+async function fetchRecentPool(db, site) {
+  const clickLogs = db.collection('click_logs');
+  const trackingData = db.collection('tracking_data');
+  const clFilter = site ? { origin: site } : {};
+  const tdFilter = site ? { origin: site } : {};
+
+  const [clRecentRaw, tdRecentRaw] = await Promise.all([
+    clickLogs.find(clFilter).sort({ timestamp: -1 }).limit(RECENT_POOL_LIMIT).toArray().catch(() => []),
+    trackingData.find(tdFilter).sort({ timestamp: -1 }).limit(RECENT_POOL_LIMIT).toArray().catch(() => []),
+  ]);
+
+  const clRecent = clRecentRaw.map(d => ({
+    source: 'aimedia_backend',
+    origin: d.origin,
+    url: d.url,
+    country: d.country || '',
+    timestamp: d.timestamp,
+  }));
+  const tdRecent = tdRecentRaw.map(d => ({
+    source: 'aianlyticstrack',
+    origin: d.origin,
+    url: d.url,
+    country: d.country || '',
+    timestamp: new Date(d.timestamp),
+  }));
+
+  return [...clRecent, ...tdRecent].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+}
+
+router.get('/recent', async (req, res) => {
+  try {
+    const db = rawDb();
+    const site = req.query.site || null;
+    const page = Math.max(parseInt(req.query.page) || 1, 1);
+    const pageSize = Math.min(Math.max(parseInt(req.query.pageSize) || 25, 1), 100);
+
+    const pool = await fetchRecentPool(db, site);
+    const total = pool.length;
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+    const rows = pool.slice((page - 1) * pageSize, page * pageSize);
+
+    res.json({ success: true, rows, page, pageSize, total, totalPages });
+  } catch (error) {
+    console.error('Analytics recent error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
 router.get('/overview', async (req, res) => {
   try {
     const db = rawDb();
@@ -45,45 +97,24 @@ router.get('/overview', async (req, res) => {
     };
 
     const [
-      clTotal, clToday, clBySite, clByCountry, clRecentRaw, clOrigins,
-      tdTotal, tdToday, tdBySite, tdByCountry, tdRecentRaw, tdOrigins,
+      clTotal, clToday, clBySite, clByCountry, clOrigins,
+      tdTotal, tdToday, tdBySite, tdByCountry, tdOrigins,
       allConfiguredSites,
     ] = await Promise.all([
       clickLogs.countDocuments(clFilter).catch(() => 0),
       clickLogs.countDocuments(clTodayFilter).catch(() => 0),
       clickLogs.aggregate([{ $match: clFilter }, { $group: { _id: '$origin', count: { $sum: 1 } } }]).toArray().catch(() => []),
       clickLogs.aggregate([{ $match: clFilter }, { $group: { _id: '$country', count: { $sum: 1 } } }]).toArray().catch(() => []),
-      clickLogs.find(clFilter).sort({ timestamp: -1 }).limit(30).toArray().catch(() => []),
       clickLogs.distinct('origin').catch(() => []),
 
       trackingData.countDocuments(tdFilter).catch(() => 0),
       trackingData.countDocuments(tdTodayFilter).catch(() => 0),
       trackingData.aggregate([{ $match: tdFilter }, { $group: { _id: '$origin', count: { $sum: 1 } } }]).toArray().catch(() => []),
       trackingData.aggregate([{ $match: tdFilter }, { $group: { _id: '$country', count: { $sum: 1 } } }]).toArray().catch(() => []),
-      trackingData.find(tdFilter).sort({ timestamp: -1 }).limit(30).toArray().catch(() => []),
       trackingData.distinct('origin').catch(() => []),
 
       Site.find({}, 'host campaign').lean(),
     ]);
-
-    const clRecent = clRecentRaw.map(d => ({
-      source: 'aimedia_backend',
-      origin: d.origin,
-      url: d.url,
-      country: d.country || '',
-      timestamp: d.timestamp,
-    }));
-    const tdRecent = tdRecentRaw.map(d => ({
-      source: 'aianlyticstrack',
-      origin: d.origin,
-      url: d.url,
-      country: d.country || '',
-      timestamp: new Date(d.timestamp),
-    }));
-
-    const recent = [...clRecent, ...tdRecent]
-      .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
-      .slice(0, 40);
 
     const bySite = mergeCounts(clBySite, tdBySite);
     const byCountry = mergeCounts(clByCountry, tdByCountry).filter(c => c.name && c.name !== 'Unknown');
@@ -102,7 +133,6 @@ router.get('/overview', async (req, res) => {
       todayClicks: clToday + tdToday,
       bySite,
       byCountry,
-      recent,
       allSites: [...trackedOrigins].sort(),
       untrackedSites: [...new Set(untrackedSites)].sort(),
       activeSite: site,
