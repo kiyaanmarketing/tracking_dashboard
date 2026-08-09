@@ -390,6 +390,16 @@ body {
 .recent-table tr:last-child td { border-bottom: none; }
 .src-tag { font-size: 10px; padding: 2px 7px; border-radius: 4px; background: var(--info-dim); color: var(--info); white-space: nowrap; }
 
+.url-scroll {
+  max-width: 320px;
+  overflow-x: auto;
+  white-space: nowrap;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border2) transparent;
+}
+.url-scroll::-webkit-scrollbar { height: 5px; }
+.url-scroll::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+
 /* TOAST */
 .toast {
   position: fixed;

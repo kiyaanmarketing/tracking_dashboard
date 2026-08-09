@@ -117,7 +117,7 @@ function renderRecent(rows) {
           <tr>
             <td>${escapeHtml(r.origin || '—')}</td>
             <td><span class="src-tag">${escapeHtml(r.source)}</span></td>
-            <td style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeHtml(r.url || '')}">${escapeHtml(r.url || '—')}</td>
+            <td><div class="url-scroll" title="${escapeHtml(r.url || '')}">${escapeHtml(r.url || '—')}</div></td>
             <td>${escapeHtml(r.country || '—')}</td>
             <td style="color:var(--text2);white-space:nowrap">${new Date(r.timestamp).toLocaleString('en-IN')}</td>
           </tr>`).join('')}
