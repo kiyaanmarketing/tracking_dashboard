@@ -154,7 +154,7 @@ function renderRecent(rows) {
   }
   el.innerHTML = `
     <table>
-      <thead><tr><th>Site</th><th>Source</th><th>URL</th><th>Country</th><th>Time</th></tr></thead>
+      <thead><tr><th>Site</th><th>Source</th><th>URL</th><th>Referrer</th><th>Country</th><th>Time</th></tr></thead>
       <tbody>
         ${rows.map(r => `
           <tr>
@@ -166,6 +166,12 @@ function renderRecent(rows) {
                 ${r.url ? `<button class="btn-copy" data-action="copy-url" data-url="${escapeHtml(r.url)}" title="Copy URL">⧉</button>` : ''}
               </div>
             </td>
+            <td>
+              <div class="url-cell">
+                <div class="url-scroll" title="${escapeHtml(r.referrer || '')}">${escapeHtml(r.referrer || '—')}</div>
+                ${r.referrer ? `<button class="btn-copy" data-action="copy-url" data-url="${escapeHtml(r.referrer)}" title="Copy Referrer">⧉</button>` : ''}
+              </div>
+            </td>
             <td>${escapeHtml(r.country || '—')}</td>
             <td style="color:var(--text2);white-space:nowrap">${new Date(r.timestamp).toLocaleString('en-IN')}</td>
           </tr>`).join('')}
@@ -173,15 +179,15 @@ function renderRecent(rows) {
     </table>`;
 }
 
-// URL text saara user-editable click data se aata hai — copy button pe raw
-// value ko onclick string mein mat daalo, data-url attribute se hi padho
-// (decode HTML entities apne aap ho jaata hai attribute read karte waqt).
+// URL/Referrer text saara user-editable click data se aata hai — copy button
+// pe raw value ko onclick string mein mat daalo, data-url attribute se hi
+// padho (decode HTML entities apne aap ho jaata hai attribute read karte waqt).
 document.getElementById('a-recent').addEventListener('click', async (e) => {
   const btn = e.target.closest('[data-action="copy-url"]');
   if (!btn) return;
   try {
     await navigator.clipboard.writeText(btn.dataset.url);
-    toast('✅ URL copied');
+    toast('✅ Copied');
   } catch (err) {
     toast('❌ Copy nahi hua: ' + err.message);
   }

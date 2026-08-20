@@ -42,6 +42,7 @@ async function fetchRecentPool(db, site) {
     source: 'aimedia_backend',
     origin: d.origin,
     url: d.url,
+    referrer: d.referrer || '',
     country: d.country || '',
     timestamp: d.timestamp,
   }));
@@ -49,6 +50,7 @@ async function fetchRecentPool(db, site) {
     source: 'aianlyticstrack',
     origin: d.origin,
     url: d.url,
+    referrer: d.referrer || '',
     country: d.country || '',
     timestamp: new Date(d.timestamp),
   }));
